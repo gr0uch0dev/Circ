@@ -134,6 +134,30 @@ struct command_info get_command_info_from_buffer(char *input_text) {
 //    return output;
 //}
 
+
+void from_buffer_to_words_list(const char *buffer, char words_list[100][100], int *count_words){
+
+    int i = 0, j = 0, num_word = 0;
+    int saved_at_least_a_char = 0;
+
+    while(buffer[i] != '\n' && buffer[i] != '\r') {
+        if (buffer[i] == ' ') {
+            if(saved_at_least_a_char && buffer[i+1] != ' ') num_word++; // increase the number of words saved
+            j = 0; // reset the counter for saving char
+        } else {
+            if(!saved_at_least_a_char) saved_at_least_a_char = 1;
+            words_list[num_word][j] = buffer[i];
+            if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r') words_list[num_word][j+1] = '\0';
+            j++;
+        }
+        i++;
+    }
+    *count_words = num_word + 1;
+}
+
+
+
+
 int main(int argc, char *argv[])
 {
     int opt;
@@ -258,10 +282,6 @@ int main(int argc, char *argv[])
         bzero(buffer,256);
         int nickname_was_sent = 0;
 
-        // read all the words sent
-        char words_recieved[100][100];
-        int num_word = 0;
-        chilog(INFO,"First attempt to read");
         chilog(INFO,"Buffer before reading: %s",buffer);
         n = read(new_sock_fd,buffer,255);
         if (n < 0) error("ERROR reading from socket");
@@ -271,73 +291,36 @@ int main(int argc, char *argv[])
         int i = 0, j = 0;
         int saved_at_least_a_char = 0;
 
-        while(buffer[i] != '\n' && buffer[i] != '\r') {
+        char words_recieved[100][100];
+        int count_words = 0;
+        from_buffer_to_words_list(buffer, words_recieved, &count_words);
 
-            if (buffer[i] == ' ') {
-                if(saved_at_least_a_char && buffer[i+1] != ' ') num_word++; // increase the number of words saved
-                // if also the next is a space don't update num words now
-                j = 0; // reset the counter for saving char
-            } else {
-                if(!saved_at_least_a_char) saved_at_least_a_char = 1;
-                words_recieved[num_word][j] = buffer[i];
-                // if last char add a termination char for the string
-                if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r') words_recieved[num_word][j+1] = '\0';
-                j++;
-            }
-
-            i++;
-        }
+        //TODO we need to get the remaing messages from the buffer
 
         // TODO revisit the following
         char *command_to_check_for = "NICK";
 
-        for (int k = 0; k < num_word + 1; k++){
+        for (int k = 0; k < count_words; k++){
             if (strncmp(words_recieved[k], command_to_check_for, 5) == 0){
                 nickname_was_sent = 1;
-                if (k+1 > num_word){ // NICK command found but no more words available to pick from
+                if (k+1 >= count_words){ // NICK command found but no more words available to pick from
                     error("NICK command provided with no arguments");
                 }
                 strncpy(n_name, words_recieved[k+1], MAX_NICK_NAME_LEN);
             }
         }
 
-
-
-//
-//        // TODO solve issues here of reading again the buffer
-//        if(!nickname_was_sent){
-//
+        // TODO check for remaining buffers
+//        chilog(INFO, "Going into buffer cycle");
+//        do{
+//            bzero(buffer,256);
 //            n = read(new_sock_fd,buffer,255);
-//            chilog(INFO,"Second attempt to read: %d",n);
+//            chilog(INFO, "Buffer read: %s", buffer);
 //
-//            i = 0, j = 0; // reset to run again
-//            saved_at_least_a_char = 0;
-//            while(buffer[i] != '\n' && buffer[i] != '\r') {
+//        } while(n > 0);
 //
-//                if (buffer[i] == ' ') {
-//                    if(saved_at_least_a_char && buffer[i+1] != ' ') num_word++; // increase the number of words saved
-//                    // if also the next is a space don't update num words now
-//                    i++; // move next to current space
-//                    j = 0; // reset the counter for saving char
-//                } else {
-//                    if(!saved_at_least_a_char) saved_at_least_a_char = 1;
-//                    words_recieved[num_word][j] = buffer[i];
-//                    // if last char add a termination char for the string
-//                    if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r') words_recieved[num_word][j+1] = '\0';
-//                }
-//
-//                i++;
-//            }
-//        }
-//
-//        for (int k = 0; k < num_word; k++){
-//            chilog(INFO,"Saved word number %d is: %s", k+1, words_recieved[k]);
-//        }
-//
-//
-//        //
 
-//        if (!nickname_was_sent) error("Missing NICK");
+        chilog(INFO, "Out of buffer cycle");
 
 
         bzero(buffer,256);
