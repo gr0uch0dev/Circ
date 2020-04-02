@@ -51,3 +51,6 @@ endforeach()
 
 add_executable(server Learning/Socket/server.c)
 add_executable(client Learning/Socket/client.c)
+add_executable(whois Learning/Socket/whois.c)
+
+add_executable(showip Learning/Socket/showip.c)
