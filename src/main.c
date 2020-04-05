@@ -54,6 +54,7 @@
 #include <asm/errno.h>
 #include <errno.h>
 
+#include <interfaces/utils.h>
 
 #define MAX_NICK_NAME_NUM 100
 #define MAX_NICK_NAME_LEN 10
@@ -209,7 +210,6 @@ void parse_buffer_and_update_words_list(const char *buffer, char words_list[100]
         }
 }
 
-
 int main(int argc, char *argv[])
 {
     int opt;
@@ -336,76 +336,44 @@ int main(int argc, char *argv[])
 
         int nickname_was_sent = 0;
 
-        char words_recieved[100][100];
+        char words_received[100][100];
         int count_words = 0;
 
        // n = receive(new_sock_fd, buffer, 255, 0);
 
         char *command_to_check_for = "NICK";
 
-        //n = receive_and_update_words_list(new_sock_fd, 255, 0, words_recieved);
-        //int i = 0, j = 0;
-
-//        struct timeval tv;
-//        tv.tv_sec = 60;
-//        tv.tv_usec = 0;
-//        setsockopt(new_sock_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
-//        int status = fcntl(socket_fd, F_SETFL, fcntl(socket_fd, F_GETFL, 0) | O_NONBLOCK);
-        // Set non-blocking
-
-
-
-        // TODO make the socket non blocking
-
-//        fd_set fdset;
-//        struct timeval tv;
-//        fcntl(new_sock_fd, F_SETFL, O_NONBLOCK);
-
-//        FD_ZERO(&fdset);
-//        FD_SET(new_sock_fd, &fdset);
-//        tv.tv_sec = 3;
-//        tv.tv_usec = 0;
-
         int num_msg = 0;
         int msg_to_recv = 2;
-        // TODO problem here is  that I cheated with knowing the number of the messages to make the test pass
-        while(msg_to_recv){
+
+        while(1){
             bzero(buffer,256);
             n = recv(new_sock_fd, buffer, 255, 0);
             chilog(INFO,"Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
             if (n == 0) break;
-
             if (n < -1) error("Error in reading from socket");
-            //parse_buffer_and_update_words_list(buffer,words_recieved,&count_words);
+            //parse_buffer_and_update_words_list(buffer,words_received,&count_words);
 
             //TODO move the following in a procedure
             int counter = n, i = 0, j=0;
+            update_words_received(n, buffer, words_received, &count_words);
 
-            while(counter > i) {
-                if (buffer[i] != '\n' && buffer[i] != '\r' && buffer[i] != ' '){
-                    words_recieved[count_words][j] = buffer[i];
-                    j++;
-                    if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r'){
-                        words_recieved[count_words][j] = '\0';
-                        count_words++;
-                        j = 0;
+            for (int k = 0; k < count_words; k++){
+                if (strncmp(words_received[k], command_to_check_for, 5) == 0){
+                    nickname_was_sent = 1;
+                    if (k+1 >= count_words){ // NICK command found but no more words available to pick from
+                        error("NICK command provided with no arguments");
                     }
+                    strncpy(n_name, words_received[k + 1], MAX_NICK_NAME_LEN);
+                    break;
                 }
-                i++;
             }
+            if (nickname_was_sent) break;
             //if (buffer[n-1] == '\n' && buffer[n-2] == '\r') break;
-            msg_to_recv--;
+            // msg_to_recv--;
         }
 
-        for (int k = 0; k < count_words; k++){
-            if (strncmp(words_recieved[k], command_to_check_for, 5) == 0){
-                nickname_was_sent = 1;
-                if (k+1 >= count_words){ // NICK command found but no more words available to pick from
-                    error("NICK command provided with no arguments");
-                }
-                strncpy(n_name, words_recieved[k+1], MAX_NICK_NAME_LEN);
-            }
-        }
+
 
 //   #####################################################
 //       While loop that has trouble with python test
@@ -429,16 +397,16 @@ int main(int argc, char *argv[])
 //                }
 //            }
 //            if (n < -1) error("Error in reading from socket");
-//            //parse_buffer_and_update_words_list(buffer,words_recieved,&count_words);
+//            //parse_buffer_and_update_words_list(buffer,words_received,&count_words);
 //
 //            //TODO move the following in a procedure
 //            int counter = n;
 //            while(counter > i) {
 //                if (buffer[i] != '\n' && buffer[i] != '\r' && buffer[i] != ' '){
-//                    words_recieved[count_words][j] = buffer[i];
+//                    words_received[count_words][j] = buffer[i];
 //                    j++;
 //                    if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r'){
-//                        words_recieved[count_words][j] = '\0';
+//                        words_received[count_words][j] = '\0';
 //                        count_words++;
 //                        j = 0;
 //                    }
@@ -449,12 +417,12 @@ int main(int argc, char *argv[])
 //        }
 //
 //        for (int k = 0; k < count_words; k++){
-//            if (strncmp(words_recieved[k], command_to_check_for, 5) == 0){
+//            if (strncmp(words_received[k], command_to_check_for, 5) == 0){
 //                nickname_was_sent = 1;
 //                if (k+1 >= count_words){ // NICK command found but no more words available to pick from
 //                    error("NICK command provided with no arguments");
 //                }
-//                strncpy(n_name, words_recieved[k+1], MAX_NICK_NAME_LEN);
+//                strncpy(n_name, words_received[k+1], MAX_NICK_NAME_LEN);
 //            }
 //        }
 
@@ -466,16 +434,16 @@ int main(int argc, char *argv[])
 //            n = recv(new_sock_fd, buffer, 255, 0);
 //            if (n < 0) error("Error in reading from socket");
 //            //if (n == 0) break;
-//            //parse_buffer_and_update_words_list(buffer,words_recieved,&count_words);
+//            //parse_buffer_and_update_words_list(buffer,words_received,&count_words);
 //
 //            //TODO move the following in a procedure
 //
 //            while(buffer[i] != '\n' && buffer[i] != '\r') {
 //                if (buffer[i] != ' '){
-//                    words_recieved[count_words][j] = buffer[i];
+//                    words_received[count_words][j] = buffer[i];
 //                    j++;
 //                    if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r'){
-//                        words_recieved[count_words][j] = '\0';
+//                        words_received[count_words][j] = '\0';
 //                        count_words++;
 //                        j = 0;
 //                    }
@@ -490,21 +458,15 @@ int main(int argc, char *argv[])
 
 
 //        for (int k = 0; k < count_words; k++){
-//            if (strncmp(words_recieved[k], command_to_check_for, 5) == 0){
+//            if (strncmp(words_received[k], command_to_check_for, 5) == 0){
 //                nickname_was_sent = 1;
 //                if (k+1 >= count_words){ // NICK command found but no more words available to pick from
 //                    error("NICK command provided with no arguments");
 //                }
-//                strncpy(n_name, words_recieved[k+1], MAX_NICK_NAME_LEN);
+//                strncpy(n_name, words_received[k+1], MAX_NICK_NAME_LEN);
 //            }
 //        }
 
-
-
-
-        // TODO check for remaining buffers
-
-//
 
         bzero(buffer,256);
         sprintf(buffer, ":circ.groucho.com 001 %s :Welcome to the Internet Relay Network %s!%s@user.example.com \r\n", n_name, n_name, n_name);
