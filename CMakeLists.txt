@@ -14,7 +14,9 @@ include_directories(src
 
 add_executable(chirc
     src/main.c
-    src/log.c)
+    src/log.c
+        src/interfaces/utils.h
+        src/modules/utils.c)
 
 target_link_libraries(chirc pthread)
 
@@ -51,3 +53,6 @@ endforeach()
 
 add_executable(server Learning/Socket/server.c)
 add_executable(client Learning/Socket/client.c)
+add_executable(whois Learning/Socket/whois.c)
+
+add_executable(showip Learning/Socket/showip.c)
