@@ -55,17 +55,14 @@
 #include <errno.h>
 
 #include <interfaces/utils.h>
+#include <reply.h>
+#include <interfaces/user.h>
+
 
 #define MAX_NICK_NAME_NUM 100
 #define MAX_NICK_NAME_LEN 10
 
 
-struct irc_user{
-    char n_name[MAX_NICK_NAME_LEN + 1];
-    char u_name[20];
-    char email[30];
-    struct irc_user *next; //implement in the DB as linked list
-};
 
 void error(char *msg) {
     perror(msg);
@@ -157,58 +154,20 @@ int receive(int sockfd, void *buf, size_t len, int flags)
     return len;
 }
 
-
-
-void single_buffer_in_words_list(const char *buffer, char words_list[100][100], int *count_words){
-
-    int i = 0, j = 0;
-        while(buffer[i] != '\n' && buffer[i] != '\r' && buffer[i] != ' ') {
-            words_list[*count_words][j] = buffer[i];
-            if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r'){
-                words_list[*count_words][j+1] = '\0';
-                (*count_words)++;
-            }
-            j = 0, i++;
-        }
+void send_message_to_client(char *buffer, int socket_fd){
+    int n;
+    n = send(socket_fd, buffer, 100, 0);
+    chilog(INFO,"Sent to socket: %s\n",buffer);
+    if (n < 0) error("ERROR writing to socket");
 }
 
-int receive_and_update_words_list(int sockfd, size_t len, int flags, char words_list[100][100])
-{
-    size_t toread = len;
-    int num_count = 0;
-    char buffer[len];
-    while (toread > 0)
-    {
-        bzero(buffer,len);
-        // TODO be careful of how words_list is passed
-        ssize_t rsz = recv(sockfd, buffer, toread, flags);
-        chilog(INFO,"n=%d. Read: %s", rsz, buffer);
-        if (*buffer) single_buffer_in_words_list(buffer,words_list,&num_count);
-        if (rsz <= 0)
-            return rsz;  /* Error or other end closed connection */
-
-        toread -= rsz;  /* Read less next time */
-    }
-
-    return len;
+void greetings_with_nickname(const char* n_name, int socket_fd){
+    char buffer[256];
+    bzero(buffer,256);
+    sprintf(buffer, ":circ.groucho.com %s %s :Welcome to the Internet Relay Network %s!%s@user.example.com \r\n", RPL_WELCOME, n_name, n_name, n_name);
+    send_message_to_client(buffer, socket_fd);
 }
 
-void parse_buffer_and_update_words_list(const char *buffer, char words_list[100][100], int *count_words){
-
-        int i = 0, j = 0;
-        while(buffer[i] != '\n' && buffer[i] != '\r') {
-            if (buffer[i] != ' '){
-                words_list[*count_words][j] = buffer[i];
-                if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r'){
-                    words_list[*count_words][j+1] = '\0';
-                    (*count_words)++;
-                    j = 0;
-                }
-                j++;
-            }
-            i++;
-        }
-}
 
 int main(int argc, char *argv[])
 {
@@ -321,11 +280,14 @@ int main(int argc, char *argv[])
     struct sockaddr_storage client_sock_addr;
     int client_len = sizeof(client_sock_addr); // the space needed that will change accordingly
 
+    User *p_user_head = (User *) malloc(sizeof(User));
+    bzero(p_user_head, sizeof(User));
+
     while (1) {
         int new_sock_fd;
         new_sock_fd = accept(socket_fd, (struct sockaddr *) &client_sock_addr, (socklen_t *) &client_len);
 
-//        fcntl(socket_fd, F_SETFL, O_NONBLOCK); /* Change the socket into non-blocking state	*/
+       // fcntl(new_sock_fd, F_SETFL, O_NONBLOCK); /* Change the socket into non-blocking state	*/
 
         // TODO change the write and read in send and recv
         if (new_sock_fd < 0)
@@ -344,18 +306,20 @@ int main(int argc, char *argv[])
         char *command_to_check_for = "NICK";
 
         int num_msg = 0;
-        int msg_to_recv = 2;
 
         while(1){
+
             bzero(buffer,256);
+
+
             n = recv(new_sock_fd, buffer, 255, 0);
             chilog(INFO,"Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
+            //if (n < 0) error("Error in reading from socket");
             if (n == 0) break;
-            if (n < -1) error("Error in reading from socket");
-            //parse_buffer_and_update_words_list(buffer,words_received,&count_words);
+            if (n == -1){
+                perror("Error reading from socket");
+            }
 
-            //TODO move the following in a procedure
-            int counter = n, i = 0, j=0;
             update_words_received(n, buffer, words_received, &count_words);
 
             for (int k = 0; k < count_words; k++){
@@ -368,113 +332,26 @@ int main(int argc, char *argv[])
                     break;
                 }
             }
-            if (nickname_was_sent) break;
-            //if (buffer[n-1] == '\n' && buffer[n-2] == '\r') break;
-            // msg_to_recv--;
+
+            if (nickname_was_sent){
+                greetings_with_nickname(n_name, new_sock_fd);
+                create_new_user_by_nickname(p_user_head,n_name, new_sock_fd);
+            }
+            // TODO
+            // greetings for nickname
+            // set user information
+
+
+            create_new_user_by_nickname(p_user_head,"Hello",1);
+            create_new_user_by_nickname(p_user_head,"questa",1);
+            create_new_user_by_nickname(p_user_head,"è",1);
+            create_new_user_by_nickname(p_user_head,"una",1);
+            create_new_user_by_nickname(p_user_head,"prova",1);
+            create_new_user_by_nickname(p_user_head,"della_linked_list",1);
+            print_all_nicknames(p_user_head);
+
         }
 
-
-
-//   #####################################################
-//       While loop that has trouble with python test
-//   #####################################################
-//        while(1){
-//            bzero(buffer,256);
-//            //sleep(2);
-//            n = recv(new_sock_fd, buffer, 255, 0);
-//            chilog(INFO,"Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
-//            //if (n < 0) error("Error in reading from socket");
-//            if (n == 0) break;
-//            if (n == -1){
-//                if ((EAGAIN == errno) || (EWOULDBLOCK == errno))
-//                {
-//                    /* no data to be read on socket */
-//                    if(!attempts--) break ; //try again
-//                    /* wait one second */
-//                    sleep(1);
-//                } else {
-//                    error("Error in reading from socket");
-//                }
-//            }
-//            if (n < -1) error("Error in reading from socket");
-//            //parse_buffer_and_update_words_list(buffer,words_received,&count_words);
-//
-//            //TODO move the following in a procedure
-//            int counter = n;
-//            while(counter > i) {
-//                if (buffer[i] != '\n' && buffer[i] != '\r' && buffer[i] != ' '){
-//                    words_received[count_words][j] = buffer[i];
-//                    j++;
-//                    if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r'){
-//                        words_received[count_words][j] = '\0';
-//                        count_words++;
-//                        j = 0;
-//                    }
-//                }
-//                i++;
-//            }
-//            //if (buffer[n-1] == '\n' && buffer[n-2] == '\r') break;
-//        }
-//
-//        for (int k = 0; k < count_words; k++){
-//            if (strncmp(words_received[k], command_to_check_for, 5) == 0){
-//                nickname_was_sent = 1;
-//                if (k+1 >= count_words){ // NICK command found but no more words available to pick from
-//                    error("NICK command provided with no arguments");
-//                }
-//                strncpy(n_name, words_received[k+1], MAX_NICK_NAME_LEN);
-//            }
-//        }
-
-
-
-//        n = 1;
-//        while(n > 0){
-//            bzero(buffer,256);
-//            n = recv(new_sock_fd, buffer, 255, 0);
-//            if (n < 0) error("Error in reading from socket");
-//            //if (n == 0) break;
-//            //parse_buffer_and_update_words_list(buffer,words_received,&count_words);
-//
-//            //TODO move the following in a procedure
-//
-//            while(buffer[i] != '\n' && buffer[i] != '\r') {
-//                if (buffer[i] != ' '){
-//                    words_received[count_words][j] = buffer[i];
-//                    j++;
-//                    if (buffer[i+1] == ' ' || buffer[i+1] == '\n' || buffer[i+1] == '\r'){
-//                        words_received[count_words][j] = '\0';
-//                        count_words++;
-//                        j = 0;
-//                    }
-//                }
-//                i++;
-//            }
-
-//            chilog(INFO,"n=%d. Read: %s", n, buffer);
-//            //if (buffer[n-1] == '\n' && buffer[n-2] == '\r') break;
-//
-//        }
-
-
-//        for (int k = 0; k < count_words; k++){
-//            if (strncmp(words_received[k], command_to_check_for, 5) == 0){
-//                nickname_was_sent = 1;
-//                if (k+1 >= count_words){ // NICK command found but no more words available to pick from
-//                    error("NICK command provided with no arguments");
-//                }
-//                strncpy(n_name, words_received[k+1], MAX_NICK_NAME_LEN);
-//            }
-//        }
-
-
-        bzero(buffer,256);
-        sprintf(buffer, ":circ.groucho.com 001 %s :Welcome to the Internet Relay Network %s!%s@user.example.com \r\n", n_name, n_name, n_name);
-
-        n = send(new_sock_fd, buffer, 100, 0);
-
-        chilog(INFO,"Sent to socket: %s\n",buffer);
-        if (n < 0) error("ERROR writing to socket");
         sleep(3); // avoid closing connection too fast
 
         close(new_sock_fd);
