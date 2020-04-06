@@ -337,19 +337,6 @@ int main(int argc, char *argv[])
                 greetings_with_nickname(n_name, new_sock_fd);
                 create_new_user_by_nickname(p_user_head,n_name, new_sock_fd);
             }
-            // TODO
-            // greetings for nickname
-            // set user information
-
-
-            create_new_user_by_nickname(p_user_head,"Hello",1);
-            create_new_user_by_nickname(p_user_head,"questa",1);
-            create_new_user_by_nickname(p_user_head,"è",1);
-            create_new_user_by_nickname(p_user_head,"una",1);
-            create_new_user_by_nickname(p_user_head,"prova",1);
-            create_new_user_by_nickname(p_user_head,"della_linked_list",1);
-            print_all_nicknames(p_user_head);
-
         }
 
         sleep(3); // avoid closing connection too fast

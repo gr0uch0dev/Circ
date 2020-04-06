@@ -16,7 +16,7 @@ add_executable(chirc
     src/main.c
     src/log.c
         src/interfaces/utils.h
-        src/modules/utils.c src/modules/user.c src/interfaces/user.h)
+        src/modules/utils.c src/modules/user.c src/interfaces/user.h src/modules/errors.c src/interfaces/errors.h)
 
 target_link_libraries(chirc pthread)
 
