@@ -61,7 +61,7 @@
 
 #define MAX_NICK_NAME_NUM 100
 #define MAX_NICK_NAME_LEN 10
-
+#define MAX_NUM_OF_PARAMS_FOR_CMD 15
 
 
 void error(char *msg) {
@@ -135,24 +135,11 @@ struct command_info get_command_info_from_buffer(char *input_text) {
 //    return output;
 //}
 
-int receive(int sockfd, void *buf, size_t len, int flags)
-{
-    size_t toread = len;
-    char  *bufptr = (char*) buf;
+// to export these
+void parse_msg_for_cmd_and_args(const char *input_baffer, char cmd_and_args[100][100]);
+void process_nick_cmd(int new_sock_fd, User *user_db, char *n_name);
+void process_the_command(int socket, User *user_db, char cmd_and_args[100][100]);
 
-    while (toread > 0)
-    {
-        ssize_t rsz = recv(sockfd, bufptr, toread, flags);
-        chilog(INFO,"n=%d. Read: %s", rsz, bufptr);
-        if (rsz <= 0)
-            return rsz;  /* Error or other end closed connection */
-
-        toread -= rsz;  /* Read less next time */
-        bufptr += rsz;  /* Next buffer position to read into */
-    }
-
-    return len;
-}
 
 void send_message_to_client(char *buffer, int socket_fd){
     int n;
@@ -161,7 +148,7 @@ void send_message_to_client(char *buffer, int socket_fd){
     if (n < 0) error("ERROR writing to socket");
 }
 
-void greetings_with_nickname(const char* n_name, int socket_fd){
+void send_greetings(int socket_fd, const char* n_name,){
     char buffer[256];
     bzero(buffer,256);
     sprintf(buffer, ":circ.groucho.com %s %s :Welcome to the Internet Relay Network %s!%s@user.example.com \r\n", RPL_WELCOME, n_name, n_name, n_name);
@@ -299,19 +286,21 @@ int main(int argc, char *argv[])
         int nickname_was_sent = 0;
 
         char words_received[100][100];
+        char cmd_and_args_array[1+MAX_NUM_OF_PARAMS_FOR_CMD][100]; // the first element stores the command, while the others the arguments
         int count_words = 0;
-
+        int count_commands = 0;
        // n = receive(new_sock_fd, buffer, 255, 0);
 
-        char *command_to_check_for = "NICK";
 
         int num_msg = 0;
+        char current_read_char = 0;
+        char last_read_char = 0;
 
+        char *buffer_with_cmd_and_args = (char *) malloc(512);
+        int num_chars_got = 0;
         while(1){
-
+            // msg delimeted by CRLF
             bzero(buffer,256);
-
-
             n = recv(new_sock_fd, buffer, 255, 0);
             chilog(INFO,"Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
             //if (n < 0) error("Error in reading from socket");
@@ -320,23 +309,29 @@ int main(int argc, char *argv[])
                 perror("Error reading from socket");
             }
 
-            update_words_received(n, buffer, words_received, &count_words);
+            // the logic is: get all the words up to \r\n. As soon as CRLF is found execute the command!
 
-            for (int k = 0; k < count_words; k++){
-                if (strncmp(words_received[k], command_to_check_for, 5) == 0){
-                    nickname_was_sent = 1;
-                    if (k+1 >= count_words){ // NICK command found but no more words available to pick from
-                        error("NICK command provided with no arguments");
-                    }
-                    strncpy(n_name, words_received[k + 1], MAX_NICK_NAME_LEN);
-                    break;
+            // command1: [par1, par2] 3 levels of depth
+            // command2: [par1, par2]
+            for(int i = 0; i < n; i++){
+                current_read_char = buffer[i];
+                if (last_read_char == '\r' && current_read_char == '\n'){
+                    // got end of the message
+                    // all the words up to now are parts of a COMMAND + [Args]
+                    parse_msg_for_cmd_and_args(buffer_with_cmd_and_args, cmd_and_args_array);
+                    process_the_command(new_sock_fd, p_user_head, cmd_and_args_array);
+                    //clean_the_command_buffer;
+                    bzero(buffer_with_cmd_and_args, 1000);
+                    num_chars_got = 0; //refresh the counter
                 }
+                if (current_read_char!='\r' && current_read_char!='\n'){
+                    *(buffer_with_cmd_and_args + num_chars_got++) = current_read_char;
+                    // save the char at memory area addressed. Pointer displaced by i units (here one byte per unit).
+                }
+                last_read_char = current_read_char;
             }
 
-            if (nickname_was_sent){
-                greetings_with_nickname(n_name, new_sock_fd);
-                create_new_user_by_nickname(p_user_head,n_name, new_sock_fd);
-            }
+
         }
 
         sleep(3); // avoid closing connection too fast
@@ -348,3 +343,41 @@ int main(int argc, char *argv[])
 
 
 
+void parse_msg_for_cmd_and_args(const char *input_baffer, char cmd_and_args[100][100]){
+    if (*input_baffer == 0) chilog(INFO,"Handle this problem. We just got CRLF");
+
+    int index_word = 0, i = 0, j = 0;
+    char last_read_char = 0;
+    char processed_char;
+    while(*(input_baffer + i) != 0){
+        processed_char = *(input_baffer + i);
+        if (processed_char == ' '){ //space in the string buffer
+            if (last_read_char != ' '){
+                index_word++; //increase the word index only when we encounter the first space
+                j = 0; //reset the j counter used for placing the chars in cmd_and_args[(previous index_word)]
+            }
+            // if at next iteration an other space is found, it is skipped (index word is not changed)
+        } else{
+            cmd_and_args[index_word][j++] = processed_char;
+        }
+        i++;
+        last_read_char = processed_char;
+    }
+
+}
+
+void process_the_command(int socket, User *user_db, char cmd_and_args[100][100]){
+
+    if (strncmp(cmd_and_args[0], "NICK", 5) == 0){
+        process_nick_cmd(socket, user_db, cmd_and_args[1]);
+    } else{
+        chilog(INFO, "command yet to be implemented");
+    }
+
+}
+
+void process_nick_cmd(int new_sock_fd, User *user_db, char *n_name){
+
+    send_greetings(new_sock_fd, n_name);
+    create_new_user_by_nickname(user_db, n_name, new_sock_fd);
+}
