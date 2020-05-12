@@ -8,13 +8,14 @@
 typedef struct User{
     int socket_fd;
     char *nick_name;
+    char *user_name;
     char *email;
     struct User *next;
 
 }User;
 
 
-void create_new_user_by_nickname(User * head, char *nick_name, int socket_fd);
+User create_new_user(int socket_fd, User *p_user_head, char *nick_name, char *user_name);
 void print_all_nicknames(User* p_head);
 User *remove_user_by_nickname(User* p_user_head, char *n_name_to_remove);
 

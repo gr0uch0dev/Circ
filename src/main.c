@@ -61,7 +61,7 @@
 
 #define MAX_NICK_NAME_NUM 100
 #define MAX_NICK_NAME_LEN 10
-#define MAX_NUM_OF_PARAMS_FOR_CMD 15
+
 
 
 void error(char *msg) {
@@ -137,21 +137,22 @@ struct command_info get_command_info_from_buffer(char *input_text) {
 
 // to export these
 void parse_msg_for_cmd_and_args(const char *input_baffer, char cmd_and_args[100][100]);
-void process_nick_cmd(int new_sock_fd, User *user_db, char *n_name);
-void process_the_command(int socket, User *user_db, char cmd_and_args[100][100]);
-
+void create_new_user_with_the_data_got(int new_sock_fd, User *user_db, char *n_name, char *u_name);
+void process_the_command(int socket, User *user_db, Command);
+Command build_the_command(char cmd_and_args[100][100]);
 
 void send_message_to_client(char *buffer, int socket_fd){
     int n;
     n = send(socket_fd, buffer, 100, 0);
-    chilog(INFO,"Sent to socket: %s\n",buffer);
+    //printf("Sent to socket: %s\n",buffer);
     if (n < 0) error("ERROR writing to socket");
 }
 
-void send_greetings(int socket_fd, const char* n_name,){
+void send_greetings(int socket_fd, User input_user){
     char buffer[256];
     bzero(buffer,256);
-    sprintf(buffer, ":circ.groucho.com %s %s :Welcome to the Internet Relay Network %s!%s@user.example.com \r\n", RPL_WELCOME, n_name, n_name, n_name);
+    sprintf(buffer, ":circ.groucho.com %s %s :Welcome to the Internet Relay Network %s!%s@user.example.com \r\n",
+            RPL_WELCOME, input_user.nick_name, input_user.nick_name, input_user.user_name);
     send_message_to_client(buffer, socket_fd);
 }
 
@@ -270,6 +271,8 @@ int main(int argc, char *argv[])
     User *p_user_head = (User *) malloc(sizeof(User));
     bzero(p_user_head, sizeof(User));
 
+
+
     while (1) {
         int new_sock_fd;
         new_sock_fd = accept(socket_fd, (struct sockaddr *) &client_sock_addr, (socklen_t *) &client_len);
@@ -298,11 +301,19 @@ int main(int argc, char *argv[])
 
         char *buffer_with_cmd_and_args = (char *) malloc(512);
         int num_chars_got = 0;
+        Command received_cmd = {};
+        Command previous_cmd = {};
+        bzero(&previous_cmd, sizeof(previous_cmd));
+
         while(1){
             // msg delimeted by CRLF
             bzero(buffer,256);
             n = recv(new_sock_fd, buffer, 255, 0);
-            chilog(INFO,"Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
+            chilog(INFO, "Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
+            if (n==33){
+                int x = 0; // debug
+            }
+
             //if (n < 0) error("Error in reading from socket");
             if (n == 0) break;
             if (n == -1){
@@ -313,15 +324,37 @@ int main(int argc, char *argv[])
 
             // command1: [par1, par2] 3 levels of depth
             // command2: [par1, par2]
+
             for(int i = 0; i < n; i++){
                 current_read_char = buffer[i];
                 if (last_read_char == '\r' && current_read_char == '\n'){
                     // got end of the message
                     // all the words up to now are parts of a COMMAND + [Args]
+                    bzero(cmd_and_args_array, sizeof(cmd_and_args_array));
+                    // buffer_with_cmd_and_args -> holds all the chars up to CRLF
+                    // we get all the words in cmd_and_args_array
                     parse_msg_for_cmd_and_args(buffer_with_cmd_and_args, cmd_and_args_array);
-                    process_the_command(new_sock_fd, p_user_head, cmd_and_args_array);
-                    //clean_the_command_buffer;
                     bzero(buffer_with_cmd_and_args, 1000);
+                    // TODO problem: NICK is read twice
+                    bzero(&received_cmd, sizeof(received_cmd));
+                    received_cmd = build_the_command(cmd_and_args_array);
+
+                    if (received_cmd.has_a_linked_command && !received_cmd.linked_command){
+                        // if the command was expected to be with a linked command
+                        // at the moment the linked command can be either before or after
+                        if (!previous_cmd.cmd_filled_with_info){
+                            previous_cmd = received_cmd; // is it shallow or deep?
+                            //num_chars_got = 0;
+                            break;
+                        }
+                        // if the previuos command is empty then we break the cycle to get the other info out of the next one
+                        received_cmd.linked_command = &previous_cmd;
+                    }
+                    process_the_command(new_sock_fd, p_user_head, received_cmd);
+                    //clean_the_command_buffer;
+                    bzero(&previous_cmd, sizeof(previous_cmd));
+                    previous_cmd = received_cmd;
+
                     num_chars_got = 0; //refresh the counter
                 }
                 if (current_read_char!='\r' && current_read_char!='\n'){
@@ -345,7 +378,7 @@ int main(int argc, char *argv[])
 
 void parse_msg_for_cmd_and_args(const char *input_baffer, char cmd_and_args[100][100]){
     if (*input_baffer == 0) chilog(INFO,"Handle this problem. We just got CRLF");
-
+    // chilog(INFO,"Handle this problem. We just got CRLF") -> results in error
     int index_word = 0, i = 0, j = 0;
     char last_read_char = 0;
     char processed_char;
@@ -366,18 +399,62 @@ void parse_msg_for_cmd_and_args(const char *input_baffer, char cmd_and_args[100]
 
 }
 
-void process_the_command(int socket, User *user_db, char cmd_and_args[100][100]){
+//void process_the_command(int socket, User *user_db, char cmd_and_args[100][100]){
+//    // consider the various possible commands
+//    if (strncmp(cmd_and_args[0], "NICK", 5) == 0){ // this works only if NICK is received earlier (TODO fix this with struct)
+//        if (strncmp(cmd_and_args[2], "USER", 4) != 0){
+//            perror("USER is expected after NICK command.... (TODO adjustments)");
+//        }
+//        User a_new_user = create_new_user(socket, user_db, cmd_and_args[1], cmd_and_args[3]);
+//        send_greetings(socket, a_new_user);
+//
+//    } else{
+//        chilog(INFO, "command yet to be implemented");
+//    }
+//
+//}
 
-    if (strncmp(cmd_and_args[0], "NICK", 5) == 0){
-        process_nick_cmd(socket, user_db, cmd_and_args[1]);
-    } else{
-        chilog(INFO, "command yet to be implemented");
+void process_the_command(int socket, User *user_db, Command cmd_info){
+    // consider the various possible commands
+    if (cmd_info.has_a_linked_command == 1){
+        if (!cmd_info.linked_command) perror("An expected linked command was not provided!");
+    }
+    char nick_name[100], user_name[100];
+    bzero(nick_name, 100);
+    bzero(user_name, 100);
+
+    if (strncmp(cmd_info.cmd_string, "NICK",4) == 0){
+        strncpy(nick_name, cmd_info.args[0], 100);
+        strncpy(user_name, cmd_info.linked_command->args[0], 100);
+    }
+    if (strncmp(cmd_info.cmd_string, "USER",4) == 0){
+        strncpy(user_name, cmd_info.args[0], 100);
+        strncpy(nick_name, cmd_info.linked_command->args[0], 100);
     }
 
+    User a_new_user = create_new_user(socket, user_db, nick_name, user_name);
+    send_greetings(socket, a_new_user);
 }
 
-void process_nick_cmd(int new_sock_fd, User *user_db, char *n_name){
+Command build_the_command(char cmd_and_args[MAX_NUM_OF_PARAMS_FOR_CMD+1][100]){
+    Command cmd_info = {};
+    bzero(&cmd_info, sizeof(cmd_info));
+    // storing the command got
+    strncpy(cmd_info.cmd_string, cmd_and_args[0], 100);
+    if (strncmp(cmd_info.cmd_string, "NICK", 4) == 0) cmd_info.has_a_linked_command = 1;
+    if (strncmp(cmd_info.cmd_string, "USER", 4) == 0) cmd_info.has_a_linked_command = 1;
 
-    send_greetings(new_sock_fd, n_name);
-    create_new_user_by_nickname(user_db, n_name, new_sock_fd);
+    // storing the arguments provided
+    int i = 0;
+    char empty_array[100];
+    bzero(empty_array, 100);
+    while (strncmp(cmd_and_args[i + 1], empty_array, 100) != 0){
+        // argument to save
+        strncpy(cmd_info.args[i], cmd_and_args[i+1], 100);
+        i++;
+    }
+    cmd_info.linked_command = NULL;
+    cmd_info.cmd_filled_with_info = 1;
+    //cmd_info.args = cmd_and_args // check but this should make the array points to the next element
+    return cmd_info;
 }

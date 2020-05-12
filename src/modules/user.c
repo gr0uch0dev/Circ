@@ -21,7 +21,7 @@ void add_next_in_linked_struct(User *p_user, User new_user){
 
 }
 
-void create_new_user_by_nickname(User * p_user_head, char *nick_name, int socket_fd) {
+User create_new_user(int socket_fd, User *p_user_head, char *nick_name, char *user_name) {
     // represents the users with a linked data structure
 
 
@@ -30,21 +30,24 @@ void create_new_user_by_nickname(User * p_user_head, char *nick_name, int socket
     if (!(p_current_user->nick_name)){
         // first user needs to be created
         p_user_head -> nick_name = nick_name;
+        p_user_head -> user_name = user_name;
         p_user_head -> socket_fd = socket_fd;
         p_user_head -> next = NULL;
-    } else{
-        while(p_current_user -> next){
-            p_current_user = p_current_user -> next;
-        }
-        p_current_user -> next = (User *) malloc(sizeof(User));
-        bzero(p_current_user -> next, sizeof(User));
-
-        (p_current_user -> next) -> nick_name = nick_name;
-        (p_current_user -> next) -> socket_fd = socket_fd;
-        (p_current_user -> next) -> next = NULL;
+        return *p_user_head;
     }
 
+    while(p_current_user -> next){ // cycle up to when we got one that is not pointing to a next
+        p_current_user = p_current_user -> next;
+    }
 
+    p_current_user -> next = (User *) malloc(sizeof(User));
+    bzero(p_current_user -> next, sizeof(User));
+
+    (p_current_user -> next) -> nick_name = nick_name;
+    (p_current_user -> next) -> user_name = user_name;
+    (p_current_user -> next) -> socket_fd = socket_fd;
+    (p_current_user -> next) -> next = NULL;
+    return *(p_current_user->next);
 }
 //
 
