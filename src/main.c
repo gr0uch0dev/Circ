@@ -69,72 +69,6 @@ void error(char *msg) {
     exit(1);
 }
 
-void set_nickname_from_buffer(char n_name[MAX_NICK_NAME_LEN +1], const char *buffer){
-
-    bzero(n_name,MAX_NICK_NAME_LEN + 1);
-
-    int space_location = 0;
-    int i = 0;
-    while (buffer[i] != '\0' && buffer[i] != '\n' && buffer[i] != '\r'){ // this goes on up to the termination character
-        // avoid here /r because the client is sending the raw data with the carriage escape
-        if (buffer[i] == ' '){
-            space_location = i;
-            i++;
-        }
-        // get words after NICK
-        if (space_location > 0){
-            n_name[i - space_location -1] = buffer[i];
-        }
-        i++;
-    }
-}
-
-#define COMMANDS_MAX_NUM 20
-#define COMMANDS_MAX_LEN 50
-#define COMMANDS_ARGS_MAX_LEN 250
-
-struct command_info{
-    char command_type[COMMANDS_MAX_LEN + 1];
-    char command_body[250];
-};
-
-struct command_info get_command_info_from_buffer(char *input_text) {
-    struct command_info output;
-
-    bzero(output.command_type, COMMANDS_MAX_LEN +1);
-    bzero(output.command_body, COMMANDS_ARGS_MAX_LEN);
-
-    int i = 0;
-    while (*input_text  != ' ') {
-        output.command_type[i++] = *(input_text++);
-    }
-    input_text++; // go parsing the command body
-    int j = 0;
-    while (*input_text != '\r' && *input_text != '\n' ) {
-        output.command_body[j++] = *(input_text++);
-    }
-    return output;
-}
-
-
-//struct command_info get_command_info_from_buffer(char *input_text) {
-//    struct command_info output;
-//
-//    bzero(output.command_type, COMMANDS_MAX_LEN +1);
-//    bzero(output.command_body, COMMANDS_ARGS_MAX_LEN);
-//
-//    int i = 0;
-//    while (*input_text  != ' ') {
-//        output.command_type[i++] = *(input_text++);
-//    }
-//    input_text++; // go parsing the command body
-//    int j = 0;
-//    while (*input_text != '\r' && *input_text != '\n' ) {
-//        output.command_body[j++] = *(input_text++);
-//    }
-//    return output;
-//}
-
 // to export these
 void parse_msg_for_cmd_and_args(const char *input_baffer, char cmd_and_args[100][100]);
 void create_new_user_with_the_data_got(int new_sock_fd, User *user_db, char *n_name, char *u_name);
@@ -144,7 +78,7 @@ Command build_the_command(char cmd_and_args[100][100]);
 void send_message_to_client(char *buffer, int socket_fd){
     int n;
     n = send(socket_fd, buffer, 100, 0);
-    //printf("Sent to socket: %s\n",buffer);
+    chilog(INFO,"Sent to socket: %s\n",buffer);
     if (n < 0) error("ERROR writing to socket");
 }
 
@@ -277,9 +211,6 @@ int main(int argc, char *argv[])
         int new_sock_fd;
         new_sock_fd = accept(socket_fd, (struct sockaddr *) &client_sock_addr, (socklen_t *) &client_len);
 
-       // fcntl(new_sock_fd, F_SETFL, O_NONBLOCK); /* Change the socket into non-blocking state	*/
-
-        // TODO change the write and read in send and recv
         if (new_sock_fd < 0)
             error("ERROR on accept");
 
@@ -299,20 +230,28 @@ int main(int argc, char *argv[])
         char current_read_char = 0;
         char last_read_char = 0;
 
+        // TODO understand
         char *buffer_with_cmd_and_args = (char *) malloc(512);
+//        char buffer_with_cmd_and_args[512];
         int num_chars_got = 0;
         Command received_cmd = {};
         Command previous_cmd = {};
         bzero(&previous_cmd, sizeof(previous_cmd));
+        int command_can_be_processed = 0;
+        //char *buffer = (char *) malloc(256);
+        // TODO: understand why if we use malloc we have problem with chilog
 
         while(1){
             // msg delimeted by CRLF
             bzero(buffer,256);
             n = recv(new_sock_fd, buffer, 255, 0);
             chilog(INFO, "Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
-            if (n==33){
+            if (num_msg == 2){
                 int x = 0; // debug
             }
+            char *buf = "Print this for me!";
+            n = send(socket_fd, buf, 100, 0);
+            // TODO understand why we get a free error
 
             //if (n < 0) error("Error in reading from socket");
             if (n == 0) break;
@@ -324,9 +263,8 @@ int main(int argc, char *argv[])
 
             // command1: [par1, par2] 3 levels of depth
             // command2: [par1, par2]
-
-            for(int i = 0; i < n; i++){
-                current_read_char = buffer[i];
+            int i = 0;
+            while((current_read_char = buffer[i++]) != 0){ // until we have sth to read in the buffer
                 if (last_read_char == '\r' && current_read_char == '\n'){
                     // got end of the message
                     // all the words up to now are parts of a COMMAND + [Args]
@@ -334,27 +272,30 @@ int main(int argc, char *argv[])
                     // buffer_with_cmd_and_args -> holds all the chars up to CRLF
                     // we get all the words in cmd_and_args_array
                     parse_msg_for_cmd_and_args(buffer_with_cmd_and_args, cmd_and_args_array);
-                    bzero(buffer_with_cmd_and_args, 1000);
+                    bzero(buffer_with_cmd_and_args, 512);
+
                     // TODO problem: NICK is read twice
                     bzero(&received_cmd, sizeof(received_cmd));
                     received_cmd = build_the_command(cmd_and_args_array);
-
-                    if (received_cmd.has_a_linked_command && !received_cmd.linked_command){
-                        // if the command was expected to be with a linked command
-                        // at the moment the linked command can be either before or after
-                        if (!previous_cmd.cmd_filled_with_info){
-                            previous_cmd = received_cmd; // is it shallow or deep?
-                            //num_chars_got = 0;
-                            break;
+                    if (!received_cmd.has_a_linked_command){
+                        command_can_be_processed = 1;
+                    } else{
+                        if (previous_cmd.cmd_filled_with_info){ // if it is linked to a command that already has info
+                            // link to previous
+                            received_cmd.linked_command = &previous_cmd;
+                            command_can_be_processed = 1;
+                        } else{
+                            command_can_be_processed = 0;
                         }
-                        // if the previuos command is empty then we break the cycle to get the other info out of the next one
-                        received_cmd.linked_command = &previous_cmd;
                     }
-                    process_the_command(new_sock_fd, p_user_head, received_cmd);
-                    //clean_the_command_buffer;
-                    bzero(&previous_cmd, sizeof(previous_cmd));
-                    previous_cmd = received_cmd;
+                    if (command_can_be_processed){
+                        process_the_command(new_sock_fd, p_user_head, received_cmd);
+                        //clean_the_command_buffer;
+                        bzero(&previous_cmd, sizeof(previous_cmd));
 
+                    } else{
+                        previous_cmd = received_cmd;
+                    }
                     num_chars_got = 0; //refresh the counter
                 }
                 if (current_read_char!='\r' && current_read_char!='\n'){
@@ -363,8 +304,6 @@ int main(int argc, char *argv[])
                 }
                 last_read_char = current_read_char;
             }
-
-
         }
 
         sleep(3); // avoid closing connection too fast

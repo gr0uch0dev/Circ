@@ -67,6 +67,7 @@ class TestBasicConnection(object):
                          "user1\r\nUSER user1 * * :User One\r\n"],
                         wait=0.05)
         
+
         irc_session.get_reply(client, expect_code = replies.RPL_WELCOME, expect_nick="user1", expect_nparams = 1)
 
     def test_connect_partitioned_messages2(self, irc_session):

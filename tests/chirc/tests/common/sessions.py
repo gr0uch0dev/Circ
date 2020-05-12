@@ -56,8 +56,8 @@ class SingleIRCSession:
             self.irc_network_server = None
 
         #TODO remove the following two lines (just debug)
-        # self.chirc_port = 7776
-        # self.randomize_ports = False
+        self.chirc_port = 7776
+        self.randomize_ports = False
 
         self.msg_timeout = msg_timeout
         self.loglevel = loglevel
