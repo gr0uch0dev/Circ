@@ -77,7 +77,7 @@ Command build_the_command(char cmd_and_args[100][100]);
 
 void send_message_to_client(char *buffer, int socket_fd){
     int n;
-    n = send(socket_fd, buffer, 100, 0);
+    n = send(socket_fd, buffer, 256, 0);
     chilog(INFO,"Sent to socket: %s\n",buffer);
     if (n < 0) error("ERROR writing to socket");
 }
@@ -245,13 +245,10 @@ int main(int argc, char *argv[])
             // msg delimeted by CRLF
             bzero(buffer,256);
             n = recv(new_sock_fd, buffer, 255, 0);
-            chilog(INFO, "Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
-            if (num_msg == 2){
+            if (num_msg == 1){
                 int x = 0; // debug
             }
-            char *buf = "Print this for me!";
-            n = send(socket_fd, buf, 100, 0);
-            // TODO understand why we get a free error
+            chilog(INFO, "Got message #%d of length %d. Read: %s",++num_msg, n, buffer);
 
             //if (n < 0) error("Error in reading from socket");
             if (n == 0) break;
