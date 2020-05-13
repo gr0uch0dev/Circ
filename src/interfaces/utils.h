@@ -2,12 +2,6 @@
 #ifndef CHIRC_UTILS_H
 #define CHIRC_UTILS_H
 #define MAX_NUM_OF_PARAMS_FOR_CMD 15
-void update_words_received(int n, const char *buffer, char words_receieved[100][100], int *count_words);
-
-struct InfoCommands{
-    int nick_cmd_sent;
-    int user_cmd_sent;
-};
 
 
 typedef struct Command{

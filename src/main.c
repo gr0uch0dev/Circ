@@ -74,6 +74,9 @@ void parse_msg_for_cmd_and_args(const char *input_baffer, char cmd_and_args[100]
 void create_new_user_with_the_data_got(int new_sock_fd, User *user_db, char *n_name, char *u_name);
 void process_the_command(int socket, User *user_db, Command);
 Command build_the_command(char cmd_and_args[100][100]);
+int are_linked_commands(Command first_command, Command second_command);
+
+
 
 void send_message_to_client(char *buffer, int socket_fd){
     int n;
@@ -274,17 +277,20 @@ int main(int argc, char *argv[])
                     // TODO problem: NICK is read twice
                     bzero(&received_cmd, sizeof(received_cmd));
                     received_cmd = build_the_command(cmd_and_args_array);
+
+                    // check if the command can be processed
                     if (!received_cmd.has_a_linked_command){
                         command_can_be_processed = 1;
                     } else{
-                        if (previous_cmd.cmd_filled_with_info){ // if it is linked to a command that already has info
+                        command_can_be_processed = 0;
+                        if (previous_cmd.cmd_filled_with_info && are_linked_commands(received_cmd, previous_cmd)){ // if it is linked to a command that already has info
                             // link to previous
                             received_cmd.linked_command = &previous_cmd;
                             command_can_be_processed = 1;
-                        } else{
-                            command_can_be_processed = 0;
                         }
                     }
+
+                    // act if the command can be processed
                     if (command_can_be_processed){
                         process_the_command(new_sock_fd, p_user_head, received_cmd);
                         //clean_the_command_buffer;
@@ -372,6 +378,7 @@ void process_the_command(int socket, User *user_db, Command cmd_info){
     send_greetings(socket, a_new_user);
 }
 
+
 Command build_the_command(char cmd_and_args[MAX_NUM_OF_PARAMS_FOR_CMD+1][100]){
     Command cmd_info = {};
     bzero(&cmd_info, sizeof(cmd_info));
@@ -393,4 +400,15 @@ Command build_the_command(char cmd_and_args[MAX_NUM_OF_PARAMS_FOR_CMD+1][100]){
     cmd_info.cmd_filled_with_info = 1;
     //cmd_info.args = cmd_and_args // check but this should make the array points to the next element
     return cmd_info;
+}
+
+
+int are_linked_commands(Command first_command, Command second_command){
+    if (strncmp(first_command.cmd_string, "NICK", 4) == 0){
+        return (strncmp(second_command.cmd_string, "USER", 4) == 0);
+    }
+    if (strncmp(first_command.cmd_string, "USER", 4) == 0){
+        return (strncmp(second_command.cmd_string, "NICK", 4) == 0);
+    }
+    return 0;
 }
