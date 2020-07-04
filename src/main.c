@@ -87,10 +87,23 @@ void send_message_to_client(char *buffer, int socket_fd){
 
 void send_greetings(int socket_fd, User input_user){
     char buffer[256];
-    bzero(buffer,256);
-    sprintf(buffer, ":circ.groucho.com %s %s :Welcome to the Internet Relay Network %s!%s@user.example.com \r\n",
-            RPL_WELCOME, input_user.nick_name, input_user.nick_name, input_user.user_name);
+
+    bzero(buffer, 256);
+    build_numeric_reply("WELCOME", buffer, input_user);
     send_message_to_client(buffer, socket_fd);
+
+    bzero(buffer, 256);
+    build_numeric_reply("YOUR_HOST", buffer, input_user);
+    send_message_to_client(buffer, socket_fd);
+
+    bzero(buffer, 256);
+    build_numeric_reply("CREATED", buffer, input_user);
+    send_message_to_client(buffer, socket_fd);
+
+    bzero(buffer, 256);
+    build_numeric_reply("MY_INFO", buffer, input_user);
+    send_message_to_client(buffer, socket_fd);
+
 }
 
 
@@ -274,7 +287,6 @@ int main(int argc, char *argv[])
                     parse_msg_for_cmd_and_args(buffer_with_cmd_and_args, cmd_and_args_array);
                     bzero(buffer_with_cmd_and_args, 512);
 
-                    // TODO problem: NICK is read twice
                     bzero(&received_cmd, sizeof(received_cmd));
                     received_cmd = build_the_command(cmd_and_args_array);
 

@@ -3,7 +3,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
+#include <stdlib.h>
 void error(char *msg)
 {
     perror(msg);
