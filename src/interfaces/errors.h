@@ -7,5 +7,4 @@
 
 extern int NICK_NAME_NOT_FOUND;
 extern int NO_USER_PRESENT;
-
 #endif //CHIRC_ERRORS_H
