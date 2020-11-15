@@ -103,7 +103,6 @@ void send_greetings(int socket_fd, User input_user){
     bzero(buffer, 256);
     build_numeric_reply("MY_INFO", buffer, input_user);
     send_message_to_client(buffer, socket_fd);
-
 }
 
 
